@@ -40,8 +40,17 @@ class ConsoleServiceProvider extends ServiceProvider
      */
     public function boot(Dispatcher $events): void
     {
-        if ($this->app->runningInConsole()
-            && is_string($encoded = Env::get('__HYPERVEL_CONTEXT'))
+        if (! $this->app->runningInConsole()
+            || ($encoded = Env::get('__HYPERVEL_CONTEXT')) === null) {
+            return;
+        }
+
+        // Consume startup transport at boot so child processes cannot inherit stale context.
+        Env::deleteMany(['__HYPERVEL_CONTEXT']);
+        // The native environment also needs clearing when Env's putenv adapter is disabled.
+        putenv('__HYPERVEL_CONTEXT');
+
+        if (is_string($encoded)
             && is_array($context = unserialize(base64_decode($encoded, true), ['allowed_classes' => false]))) {
             $events->listen(BeforeHandle::class, static function () use (&$context): void {
                 if ($context !== null) {
